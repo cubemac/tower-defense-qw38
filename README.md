@@ -4,11 +4,11 @@ A complete tower defense game in plain JavaScript. **No build step, no dependenc
 no network requests** — eight scripts loaded in order, all art drawn procedurally,
 all sound synthesised at runtime.
 
-🎮 **Play it:** <https://cubemac.github.io/tower-defense-1/>
+🎮 **Play it:** <https://cubemac.github.io/tower-defense-qw38/>
 
 ```sh
-git clone git@github.com:cubemac/tower-defense-1.git
-cd tower-defense-1
+git clone git@github.com:cubemac/tower-defense-qw38.git
+cd tower-defense-qw38
 open index.html        # works straight off the filesystem, no server needed
 ```
 
