@@ -15,7 +15,7 @@ npx serve .
 Verify the simulation without a browser:
 
 ```sh
-node tools/sim-check.js     # 60+ assertions over path, combat, audio, economy, win state
+node tools/sim-check.js     # 60 assertions: path, combat, art, audio, economy, win state
 node tools/balance.js 27    # auto-plays N waves and reports the difficulty curve
 ```
 
