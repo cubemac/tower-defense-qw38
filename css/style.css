@@ -95,6 +95,9 @@ button.danger { border-color: rgba(255, 107, 107, 0.35); color: #ffdada; }
 button.danger:hover:not(:disabled) { background: rgba(255, 107, 107, 0.16); }
 button.big { font-size: 15px; padding: 12px 30px; }
 
+#btn-mute { font-size: 14px; padding: 6px 10px; line-height: 1; }
+#btn-mute.off { opacity: 0.5; filter: grayscale(1); }
+
 /* ---------- stage ---------- */
 .stage-wrap {
   position: relative;

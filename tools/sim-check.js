@@ -26,6 +26,9 @@ function makeCtx() {
     'clip', 'drawImage', 'quadraticCurveTo', 'bezierCurveTo',
   ];
   for (const m of methods) c[m] = noop;
+  const grad = () => ({ addColorStop: noop });
+  c.createLinearGradient = grad;
+  c.createRadialGradient = grad;
   return c;
 }
 
@@ -36,10 +39,10 @@ const context = vm.createContext(ctxObj);
 
 /* class/const are lexically scoped per script, so concatenate every source
  * into one program and then export the symbols the harness needs. */
-const FILES = ['config.js', 'utils.js', 'entities.js', 'waves.js', 'game.js'];
+const FILES = ['config.js', 'utils.js', 'audio.js', 'entities.js', 'waves.js', 'game.js'];
 const EXPORTS = ['GRID', 'PATH', 'PATH_CELLS', 'PATH_BLOCKED', 'TOWERS', 'ENEMIES',
   'SELL_RATIO', 'START_LIVES', 'MAX_LEVEL', 'pointAtDistance', 'nearestArcLength',
-  'buildWave', 'Game', 'Tower', 'Enemy', 'Spawner', 'Projectile', 'WIN_WAVE', 'BUILD_PADS'];
+  'buildWave', 'Game', 'Tower', 'Enemy', 'Spawner', 'Projectile', 'WIN_WAVE', 'BUILD_PADS', 'SFX'];
 
 const bundle = FILES
   .map(f => `\n/* ---- ${f} ---- */\n` + fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'))
@@ -268,6 +271,99 @@ console.log('\nair / ground targeting');
   cp.impact(g2, grunt);
   check('splash still hits ground units', grunt.hp < grunt.maxHp,
     `${grunt.hp}/${grunt.maxHp}`);
+}
+
+console.log('\ntower presentation state');
+{
+  const g = new G.Game(canvas);
+  g.shiftHeld = false; g.toPrep(); g.money = 9999;
+  const spot = (() => {
+    for (const k of G.BUILD_PADS) {
+      const [c, r] = k.split(',').map(Number);
+      if (g.canBuild(c, r)) return [c, r];
+    }
+  })();
+  g.buildType = 'cannon'; g.placeTower(spot[0], spot[1]); g.buildType = null;
+  const tw = g.towers.at(-1);
+
+  check('turrets start cold and seated', tw.heat === 0 && tw.recoil === 0);
+  // fire it by hand so we are not waiting on a target walking into range
+  tw.target = g.spawnEnemy('tank', 1);
+  tw.target.x = tw.x + 40; tw.target.y = tw.y;
+  tw.cool = 0;
+  tw.update(dt, g);
+  check('firing sets recoil, flash and heat',
+    tw.recoil > 0 && tw.muzzle > 0 && tw.heat > 0,
+    `recoil ${tw.recoil.toFixed(2)} heat ${tw.heat.toFixed(2)}`);
+  for (let i = 0; i < 120; i++) tw.update(dt, g);
+  check('recoil and flash decay back to rest',
+    tw.recoil === 0 && tw.muzzle === 0,
+    `recoil ${tw.recoil} flash ${tw.muzzle}`);
+
+  // geometry must visibly grow with level, and gradients must rebuild
+  const p1 = tw.parts();
+  tw.level = 4; tw._gradLevel = -1;
+  const p4 = tw.parts();
+  check('barrel geometry grows with level',
+    p4.barrelLen > p1.barrelLen && p4.barrelW > p1.barrelW,
+    `len ${p1.barrelLen}→${p4.barrelLen}, width ${p1.barrelW.toFixed(1)}→${p4.barrelW.toFixed(1)}`);
+  const gn = new G.Tower('gunner', spot[0], spot[1]);
+  check('gunner gains a third barrel at level 4',
+    gn.parts().barrels === 2 && (gn.level = 4, gn.parts().barrels === 3),
+    `${gn.parts().barrels} barrels at lv4`);
+  const tes = new G.Tower('tesla', spot[0], spot[1]);
+  const tr1 = tes.parts().rings; tes.level = 4;
+  check('tesla rings scale with level', tes.parts().rings > tr1,
+    `${tr1} → ${tes.parts().rings}`);
+  const fr = new G.Tower('frost', spot[0], spot[1]);
+  const fs1 = fr.parts().shards; fr.level = 4;
+  check('frost shards scale with level', fr.parts().shards > fs1,
+    `${fs1} → ${fr.parts().shards}`);
+
+  // every tower type must draw without throwing, at every level, hot and cold
+  let drew = 0;
+  const ctx2 = makeCtx();
+  for (const key of Object.keys(G.TOWERS)) {
+    for (let lv = 1; lv <= G.MAX_LEVEL; lv++) {
+      const t2 = new G.Tower(key, spot[0], spot[1]);
+      t2.level = lv; t2.heat = 0.8; t2.recoil = 0.6; t2.muzzle = 0.05;
+      t2.target = tw.target;
+      t2.draw(ctx2, lv === 1);
+      drew++;
+    }
+  }
+  check('all tower types render at every level', drew === Object.keys(G.TOWERS).length * G.MAX_LEVEL,
+    `${drew} render passes, no exceptions`);
+
+  // projectiles of every kind must render too
+  let pdrew = 0;
+  for (const key of ['gunner', 'cannon', 'frost', 'sniper']) {
+    const t2 = new G.Tower(key, spot[0], spot[1]);
+    const pr = new G.Projectile(t2, tw.target, t2.stats());
+    pr.trail.push({ x: pr.x - 8, y: pr.y - 4 }, { x: pr.x - 3, y: pr.y - 1 });
+    pr.draw(ctx2);
+    pdrew++;
+  }
+  check('all projectile types render', pdrew === 4, `${pdrew} projectile renders`);
+}
+
+console.log('\naudio engine (headless must not throw)');
+{
+  check('SFX surface is complete',
+    ['unlock', 'toggle', 'click', 'deny', 'place', 'upgrade', 'sell', 'shoot',
+     'hit', 'kill', 'bossDie', 'leak', 'waveStart', 'waveClear', 'gameOver', 'victory']
+      .every(k => typeof G.SFX[k] === 'function'));
+  // no AudioContext in this realm — every call must be a silent no-op
+  let threw = null;
+  try {
+    G.SFX.unlock();
+    for (const t of ['gunner', 'cannon', 'frost', 'tesla', 'sniper', 'bogus']) G.SFX.shoot(t);
+    G.SFX.place(); G.SFX.upgrade(); G.SFX.sell(); G.SFX.hit();
+    G.SFX.kill(); G.SFX.bossDie(); G.SFX.leak(); G.SFX.waveStart();
+    G.SFX.waveClear(); G.SFX.gameOver(); G.SFX.victory(); G.SFX.deny();
+  } catch (e) { threw = e; }
+  check('all SFX calls are safe without Web Audio', threw === null,
+    threw ? threw.message : 'silent fallback active');
 }
 
 console.log('\ndamage maths');

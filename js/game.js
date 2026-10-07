@@ -71,6 +71,7 @@ class Game {
     this.spawner.start(this.wave);
     this.inWave = true;
     this.state = 'wave';
+    SFX.waveStart();
   }
 
   callWaveEarly() {
@@ -99,14 +100,15 @@ class Game {
     const key = this.buildType;
     if (!key) return false;
     const def = TOWERS[key];
-    if (!this.canBuild(col, row)) { this.toast('Cannot build there', '#ff6b6b'); return false; }
-    if (this.money < def.cost) { this.toast('Not enough credits', '#ff6b6b'); return false; }
+    if (!this.canBuild(col, row)) { this.toast('Cannot build there', '#ff6b6b'); SFX.deny(); return false; }
+    if (this.money < def.cost) { this.toast('Not enough credits', '#ff6b6b'); SFX.deny(); return false; }
 
     const t = new Tower(key, col, row);
     this.towers.push(t);
     this.occupied.add(`${col},${row}`);
     this.money -= def.cost;
     this.fx.push(new Burst(t.x, t.y, def.color, 12));
+    SFX.place();
     if (!this.shiftHeld) this.buildType = null;
     return true;
   }
@@ -115,12 +117,13 @@ class Game {
     const t = this.selected;
     if (!t) return;
     const cost = t.upgradeCost();
-    if (cost == null) { this.toast('Already max level', '#ffd43b'); return; }
-    if (this.money < cost) { this.toast(`Need ${cost} credits`, '#ff6b6b'); return; }
+    if (cost == null) { this.toast('Already max level', '#ffd43b'); SFX.deny(); return; }
+    if (this.money < cost) { this.toast(`Need ${cost} credits`, '#ff6b6b'); SFX.deny(); return; }
     this.money -= cost;
     t.upgrade();
     this.fx.push(new Burst(t.x, t.y, '#ffe066', 16));
     this.toast(`${t.def.name} → Lv ${t.level}`, '#ffe066');
+    SFX.upgrade();
   }
 
   sellSelected() {
@@ -133,6 +136,7 @@ class Game {
     this.selected = null;
     this.fx.push(new Burst(t.x, t.y, '#868e96', 12));
     this.toast(`Sold for ${v}`, '#868e96');
+    SFX.sell();
   }
 
   cycleTargetMode() {
@@ -151,6 +155,7 @@ class Game {
       source === 'cannon' ? '#ff9f43' : '#e9ecef'));
 
     if (!e.alive) this.onKill(e, tower);
+    else SFX.hit();
     return dealt;
   }
 
@@ -160,7 +165,8 @@ class Game {
     this.money += e.bounty;
     this.fx.push(new Burst(e.x, e.y, e.def.color, e.key === 'boss' ? 40 : 12));
     this.fx.push(new FloatText(e.x, e.y - e.radius - 20, `+${e.bounty}`, '#51cf66'));
-    if (e.key === 'boss') this.toast(`${e.def.name} destroyed! +${e.bounty}`, '#ffe066');
+    if (e.key === 'boss') { this.toast(`${e.def.name} destroyed! +${e.bounty}`, '#ffe066'); SFX.bossDie(); }
+    else SFX.kill();
   }
 
   fireChain(tower, first, stats) {
@@ -224,9 +230,11 @@ class Game {
     this.lives -= dmg;
     this.toast(`${e.def.name} breached the line  -${dmg}`, '#ff6b6b');
     this.fx.push(new Burst(e.x, e.y, '#ff6b6b', 18));
+    SFX.leak();
     if (this.lives <= 0) {
       this.lives = 0;
       this.state = 'over';
+      SFX.gameOver();
     }
   }
 
@@ -235,8 +243,10 @@ class Game {
     const bonus = WAVE_BOUNTY_BASE + this.wave * 2;
     this.money += bonus;
     this.toast(`Wave ${this.wave} cleared  +${bonus}`, '#51cf66');
+    SFX.waveClear();
     if (this.wave >= WIN_WAVE) {
       this.state = 'won';
+      SFX.victory();
     } else {
       this.toPrep();
     }

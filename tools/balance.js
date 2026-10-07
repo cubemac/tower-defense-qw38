@@ -11,7 +11,8 @@ const vm = require('vm');
 
 const noop = () => {};
 function makeCtx() {
-  const c = { canvas: {}, createLinearGradient: () => ({ addColorStop: noop }), measureText: () => ({ width: 10 }) };
+  const c = { canvas: {}, createLinearGradient: () => ({ addColorStop: noop }),
+    createRadialGradient: () => ({ addColorStop: noop }), measureText: () => ({ width: 10 }) };
   for (const m of ['save', 'restore', 'translate', 'rotate', 'scale', 'beginPath', 'closePath',
     'moveTo', 'lineTo', 'arc', 'arcTo', 'ellipse', 'rect', 'fill', 'stroke', 'fillRect',
     'strokeRect', 'clearRect', 'setLineDash', 'fillText', 'strokeText']) c[m] = noop;
@@ -19,7 +20,7 @@ function makeCtx() {
 }
 
 const context = vm.createContext({ console, Math, Set, Map, Infinity, NaN, performance: { now: () => Date.now() } });
-const FILES = ['config.js', 'utils.js', 'entities.js', 'waves.js', 'game.js'];
+const FILES = ['config.js', 'utils.js', 'audio.js', 'entities.js', 'waves.js', 'game.js'];
 const EXPORTS = ['GRID', 'PATH', 'PATH_BLOCKED', 'BUILD_PADS', 'TOWERS', 'Game',
   'pointAtDistance', 'dist', 'MAX_LEVEL', 'WAVES'];
 const bundle = FILES.map(f => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8')).join('\n')

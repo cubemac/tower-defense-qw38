@@ -143,6 +143,49 @@ class Enemy {
   }
 }
 
+/* Cached metal gradients — rebuilt only when a tower levels up. */
+function metalGrad(ctx, y0, y1, light, mid, dark) {
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, light);
+  g.addColorStop(0.42, mid);
+  g.addColorStop(1, dark);
+  return g;
+}
+
+function radialGlow(ctx, r, color, alpha) {
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  g.addColorStop(0, withAlpha(color, alpha));
+  g.addColorStop(0.55, withAlpha(color, alpha * 0.32));
+  g.addColorStop(1, withAlpha(color, 0));
+  return g;
+}
+
+/* Octagonal deck plate shared by every tower. */
+function octagonPath(ctx, r) {
+  const k = r * 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-r + k, -r);
+  ctx.lineTo(r - k, -r);
+  ctx.lineTo(r, -r + k);
+  ctx.lineTo(r, r - k);
+  ctx.lineTo(r - k, r);
+  ctx.lineTo(-r + k, r);
+  ctx.lineTo(-r, r - k);
+  ctx.lineTo(-r, -r + k);
+  ctx.closePath();
+}
+
+/* Hot-barrel tint: cold steel -> amber -> white hot. */
+function heatTint(ctx, baseGrad, heat) {
+  if (heat <= 0.02) return baseGrad;
+  const h = clamp(heat, 0, 1);
+  const g = ctx.createLinearGradient(0, -6, 0, 6);
+  g.addColorStop(0, `rgb(${255},${Math.round(210 - h * 60)},${Math.round(190 - h * 150)})`);
+  g.addColorStop(0.5, `rgb(${Math.round(160 + h * 95)},${Math.round(120 + h * 40)},${Math.round(110 - h * 70)})`);
+  g.addColorStop(1, `rgb(${Math.round(90 + h * 90)},${Math.round(80 + h * 30)},${Math.round(90 - h * 40)})`);
+  return g;
+}
+
 class Tower {
   constructor(typeKey, col, row) {
     const d = TOWERS[typeKey];
@@ -162,10 +205,49 @@ class Tower {
     this.shotsFired = 0;
     this.damageDealt = 0;
     this.kills = 0;
-    this.muzzle = 0;
+
+    /* presentation state */
+    this.muzzle = 0;        // seconds of muzzle flash remaining
+    this.flashSize = 1;
+    this.recoil = 0;        // barrel kick 0..1
+    this.heat = 0;          // barrel glow 0..1
+    this.spin = Math.random() * Math.PI * 2;
+    this.pulse = Math.random() * Math.PI * 2;
+    this.spawnIn = 1;       // build / upgrade pop animation
+    this._grads = null;
+    this._gradLevel = -1;
   }
 
   get maxLevel() { return MAX_LEVEL; }
+
+  /* Geometry grows with level so upgrades are visible on the turret. */
+  parts() {
+    const L = this.level;
+    return {
+      barrels: this.type === 'gunner' ? (L >= 4 ? 3 : 2) : 1,
+      barrelLen: (this.type === 'sniper' ? 30 : this.type === 'cannon' ? 21 : 17)
+        + (L - 1) * (this.type === 'cannon' ? 3.5 : 2),
+      barrelW: (this.type === 'cannon' ? 13 : this.type === 'sniper' ? 5.5 : 6)
+        + (L - 1) * (this.type === 'cannon' ? 1.7 : 0.6),
+      rings: this.type === 'tesla' ? 2 + L : 0,
+      shards: this.type === 'frost' ? 3 + L : 0,
+      plateR: GRID.cell * (0.36 + L * 0.017),
+    };
+  }
+
+  grads(ctx) {
+    if (this._gradLevel !== this.level) {
+      const p = this.parts();
+      this._gradLevel = this.level;
+      this._grads = {
+        plate: metalGrad(ctx, -p.plateR, p.plateR, '#526084', '#2f3956', '#151a29'),
+        body: metalGrad(ctx, -11, 11, '#8b99b8', '#4b5674', '#222839'),
+        barrel: metalGrad(ctx, -5, 5, '#a8b8d4', '#5d6a88', '#293044'),
+        glow: radialGlow(ctx, p.plateR * 2.2, this.def.color, 0.45),
+      };
+    }
+    return this._grads;
+  }
 
   /** Cumulative stats for the current level. */
   stats() {
@@ -196,6 +278,8 @@ class Tower {
     if (c == null) return false;
     this.level++;
     this.invested += c;
+    this.spawnIn = 1;              // replay the build-in pop
+    this._gradLevel = -1;          // force gradient rebuild
     return true;
   }
 
@@ -220,95 +304,330 @@ class Tower {
     return best;
   }
 
+  fire(game) {
+    const s = this.stats();
+    this.cool = 1 / s.rate;
+    this.muzzle = 0.075;
+    this.flashSize = this.type === 'cannon' ? 2.1 : this.type === 'sniper' ? 1.6 : 1;
+    this.recoil = this.type === 'cannon' ? 1 : this.type === 'sniper' ? 0.8 : 0.5;
+    this.heat = Math.min(1, this.heat + (this.type === 'gunner' ? 0.15 : 0.34));
+    this.shotsFired++;
+
+    if (this.type === 'tesla') {
+      game.fireChain(this, this.target, s);
+    } else {
+      game.projectiles.push(new Projectile(this, this.target, s));
+    }
+    SFX.shoot(this.type);
+  }
+
   update(dt, game) {
-    if (this.muzzle > 0) this.muzzle -= dt;
+    // presentation decay
+    this.muzzle = Math.max(0, this.muzzle - dt);
+    this.recoil = Math.max(0, this.recoil - dt * 4.4);
+    this.heat = Math.max(0, this.heat - dt * 0.4);
+    this.spin += dt * (1.2 + this.level * 0.4);
+    this.pulse += dt * 3.6;
+    this.spawnIn = Math.max(0, this.spawnIn - dt * 3.6);
+
     this.cool -= dt;
 
     const t = this.pickTarget(game.enemies);
     if (t) {
       const want = Math.atan2(t.y - this.y, t.x - this.x);
       let diff = ((want - this.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-      this.angle += clamp(diff, -12 * dt, 12 * dt);
+      // heavy guns traverse noticeably slower
+      const tr = (this.type === 'cannon' ? 5 : this.type === 'sniper' ? 4.2 : 12) * dt;
+      this.angle += clamp(diff, -tr, tr);
     }
 
-    if (this.cool <= 0 && t) {
-      const s = this.stats();
-      this.cool = 1 / s.rate;
-      this.muzzle = 0.07;
-      this.shotsFired++;
-
-      if (this.type === 'tesla') {
-        game.fireChain(this, t, s);
-      } else {
-        game.projectiles.push(new Projectile(this, t, s));
-      }
-    }
+    if (this.cool <= 0 && t) this.fire(game);
   }
 
   draw(ctx, selected) {
     const s = this.stats();
+    const p = this.parts();
+    const g = this.grads(ctx);
+    const pop = 1 + this.spawnIn * 0.28;
+
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // base plate
-    ctx.fillStyle = '#20263a';
-    roundRect(ctx, -GRID.cell * 0.42, -GRID.cell * 0.42, GRID.cell * 0.84, GRID.cell * 0.84, 7);
+    // ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath();
+    ctx.ellipse(1.5, p.plateR * 0.5, p.plateR * 1.02, p.plateR * 0.44, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = withAlpha(this.def.color, 0.55);
+
+    // ambient glow in the tower's colour, stronger at higher levels
+    ctx.fillStyle = g.glow;
+    ctx.globalAlpha = 0.35 + this.level * 0.11 + (this.muzzle > 0 ? 0.3 : 0);
+    ctx.beginPath();
+    ctx.arc(0, 0, p.plateR * 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.scale(pop, pop);
+
+    /* ---------- deck plate ---------- */
+    octagonPath(ctx, p.plateR);
+    ctx.fillStyle = g.plate;
+    ctx.fill();
     ctx.lineWidth = 2;
+    ctx.strokeStyle = withAlpha(this.def.color, 0.5 + this.level * 0.1);
     ctx.stroke();
 
-    // level pips
-    for (let i = 0; i < this.level; i++) {
-      ctx.fillStyle = this.def.color;
+    // inner bevel highlight along the top edge
+    ctx.beginPath();
+    ctx.moveTo(-p.plateR * 0.6, -p.plateR * 0.86);
+    ctx.lineTo(p.plateR * 0.6, -p.plateR * 0.86);
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // rivets
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    const rv = p.plateR * 0.74;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       ctx.beginPath();
-      ctx.arc(-GRID.cell * 0.3 + i * 7, GRID.cell * 0.31, 2.4, 0, Math.PI * 2);
+      ctx.arc(sx * rv, sy * rv * 0.72, 1.7, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // turret
-    ctx.rotate(this.angle);
-    const flash = this.muzzle > 0;
-    ctx.fillStyle = flash ? '#fff6d8' : this.def.color;
-
-    if (this.type === 'cannon') {
-      roundRect(ctx, -4, -7, 22, 14, 4); ctx.fill();
-      roundRect(ctx, 14, -5, 9, 10, 3); ctx.fill();
-    } else if (this.type === 'sniper') {
-      roundRect(ctx, -3, -3.5, 30, 7, 3); ctx.fill();
-      ctx.fillStyle = '#20263a';
-      roundRect(ctx, 4, -1.5, 8, 3, 1.5); ctx.fill();
-    } else if (this.type === 'frost') {
-      ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#e7f5ff'; ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        const a = (i / 3) * Math.PI * 2;
-        ctx.beginPath(); ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(a) * 15, Math.sin(a) * 15); ctx.stroke();
-      }
-    } else if (this.type === 'tesla') {
-      ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = flash ? '#fff' : withAlpha(this.def.color, 0.8);
+    // level chevrons on the front of the deck
+    for (let i = 0; i < this.level; i++) {
+      ctx.strokeStyle = withAlpha(this.def.color, 0.95);
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, 15 + (flash ? 3 : 0), 0, Math.PI * 2); ctx.stroke();
-    } else {
-      roundRect(ctx, -4, -5, 18, 10, 3); ctx.fill();
+      ctx.beginPath();
+      const y = p.plateR * 0.5 - i * 3.4;
+      ctx.moveTo(-5, y + 2.6);
+      ctx.lineTo(0, y - 1.4);
+      ctx.lineTo(5, y + 2.6);
+      ctx.stroke();
     }
 
+    /* ---------- turret head ---------- */
+    ctx.save();
+    ctx.rotate(this.angle);
+    const kick = -this.recoil * (this.type === 'cannon' ? 6 : 3.4);
+    ctx.translate(kick, 0);
+
+    const flash = this.muzzle > 0;
+    const barrelGrad = heatTint(ctx, g.barrel, this.heat);
+
+    if (this.type === 'gunner') {
+      // chassis + twin/triple barrels with muzzle brakes
+      roundRect(ctx, -9, -8.5, 17, 17, 4);
+      ctx.fillStyle = g.body; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = withAlpha(this.def.color, 0.5);
+      roundRect(ctx, -6.5, -3, 6, 6, 2); ctx.fill();
+
+      const offs = p.barrels === 3 ? [-4.6, 0, 4.6] : [-3, 3];
+      ctx.fillStyle = barrelGrad;
+      for (const o of offs) {
+        roundRect(ctx, 5, o - p.barrelW / 2 + 1.4, p.barrelLen, p.barrelW - 2.8, 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      // muzzle brake block
+      ctx.fillStyle = '#1c2233';
+      roundRect(ctx, p.barrelLen + 3, -p.barrelW / 2 + 0.6, 4, p.barrelW - 1.2, 1.5);
+      ctx.fill();
+
+    } else if (this.type === 'cannon') {
+      // hydraulic stabilisers, mantlet, fat stepped barrel
+      ctx.strokeStyle = '#39435f'; ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      ctx.moveTo(-6, -9); ctx.lineTo(-13, -13);
+      ctx.moveTo(-6, 9); ctx.lineTo(-13, 13);
+      ctx.stroke();
+
+      roundRect(ctx, -10, -11, 20, 22, 5);
+      ctx.fillStyle = g.body; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.6; ctx.stroke();
+
+      ctx.fillStyle = barrelGrad;
+      roundRect(ctx, 6, -p.barrelW / 2, p.barrelLen * 0.72, p.barrelW, 3);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1.2; ctx.stroke();
+
+      // muzzle brake with cooling slots
+      ctx.fillStyle = '#232a3d';
+      roundRect(ctx, 6 + p.barrelLen * 0.72, -p.barrelW / 2 - 1.6, 8, p.barrelW + 3.2, 2.5);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(this.def.color, 0.55); ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        const x = 8 + p.barrelLen * 0.72 + i * 2.4;
+        ctx.beginPath(); ctx.moveTo(x, -p.barrelW / 2 - 0.6); ctx.lineTo(x, p.barrelW / 2 + 0.6);
+        ctx.stroke();
+      }
+
+    } else if (this.type === 'frost') {
+      // rotating crystal emitter around a pulsing cryo core
+      roundRect(ctx, -8, -8, 15, 16, 4);
+      ctx.fillStyle = g.body; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+      const pulse = 0.55 + Math.sin(this.pulse) * 0.2;
+      ctx.fillStyle = radialGlow(ctx, 17 + this.level, '#bff4ff', pulse);
+      ctx.beginPath(); ctx.arc(2, 0, 17 + this.level, 0, Math.PI * 2); ctx.fill();
+
+      ctx.save();
+      ctx.translate(3, 0);
+      ctx.rotate(this.spin);
+      ctx.fillStyle = withAlpha('#d9f7ff', 0.9);
+      ctx.strokeStyle = '#5fd0ea'; ctx.lineWidth = 1;
+      for (let i = 0; i < p.shards; i++) {
+        ctx.save();
+        ctx.rotate((i / p.shards) * Math.PI * 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -11 - this.level);
+        ctx.lineTo(3.2, 0);
+        ctx.lineTo(0, 4);
+        ctx.lineTo(-3.2, 0);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(0, 0, 3.4 + Math.sin(this.pulse) * 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+
+    } else if (this.type === 'tesla') {
+      // coil body, stacked rings, arcing orb
+      roundRect(ctx, -8, -7.5, 15, 15, 4);
+      ctx.fillStyle = g.body; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+      ctx.strokeStyle = withAlpha(this.def.color, 0.75);
+      ctx.lineWidth = 2;
+      for (let i = 0; i < p.rings; i++) {
+        ctx.beginPath();
+        ctx.ellipse(3, 0, 6 + i * 3.4, 9 + i * 3.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      const orb = 5 + Math.sin(this.pulse * 1.6) * 1.2 + (flash ? 3 : 0);
+      ctx.fillStyle = radialGlow(ctx, orb * 2.6, flash ? '#ffffff' : '#e6d5ff', 0.95);
+      ctx.beginPath(); ctx.arc(3, 0, orb * 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = flash ? '#ffffff' : '#f2e8ff';
+      ctx.beginPath(); ctx.arc(3, 0, orb, 0, Math.PI * 2); ctx.fill();
+
+      // idle micro-arcs between the prongs
+      if (!flash) {
+        ctx.strokeStyle = withAlpha(this.def.color, 0.45);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        let px = 3 - orb, py = -orb;
+        ctx.moveTo(px, py);
+        for (let i = 0; i < 3; i++) {
+          px += rand(-2.5, 2.5) + orb * 0.6;
+          py += rand(-orb, orb);
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+    } else if (this.type === 'sniper') {
+      // bipod, tapered barrel, scope with lens glint
+      ctx.strokeStyle = '#39435f'; ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(10, -3); ctx.lineTo(6, -9);
+      ctx.moveTo(10, 3); ctx.lineTo(6, 9);
+      ctx.stroke();
+
+      roundRect(ctx, -9, -6.5, 17, 13, 4);
+      ctx.fillStyle = g.body; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+      ctx.fillStyle = barrelGrad;
+      roundRect(ctx, 6, -p.barrelW / 2, p.barrelLen, p.barrelW, 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+
+      // scope
+      roundRect(ctx, -2, -10.5, 13, 5.5, 2.5);
+      ctx.fillStyle = '#1a2033'; ctx.fill();
+      ctx.strokeStyle = withAlpha(this.def.color, 0.6); ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = withAlpha('#8fe9ff', this.target ? 0.95 : 0.5);
+      ctx.beginPath(); ctx.arc(10.5, -7.8, 2.1, 0, Math.PI * 2); ctx.fill();
+
+      // laser sight while it has a target
+      if (this.target) {
+        ctx.save();
+        ctx.strokeStyle = withAlpha('#ff6b6b', 0.28);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 6]);
+        ctx.beginPath();
+        ctx.moveTo(p.barrelLen + 4, 0);
+        ctx.lineTo(s.range, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /* ---------- muzzle flash ---------- */
     if (flash) {
-      ctx.fillStyle = 'rgba(255,236,150,0.75)';
-      ctx.beginPath(); ctx.arc(24, 0, 7, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
+      const t = this.muzzle / 0.075;
+      const mx = (this.type === 'sniper' ? p.barrelLen + 4 : p.barrelLen + 8);
+      const size = (7 + this.level * 1.6) * this.flashSize * t;
 
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = radialGlow(ctx, size * 2.4, '#ffe9a8', 0.9 * t);
+      ctx.beginPath(); ctx.arc(mx, 0, size * 2.4, 0, Math.PI * 2); ctx.fill();
+
+      // star spikes
+      ctx.fillStyle = withAlpha('#fff3c4', 0.92 * t);
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + this.spin * 0.5;
+        const rr = i % 2 ? size * 0.42 : size;
+        ctx[i ? 'lineTo' : 'moveTo'](mx + Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath(); ctx.fill();
+
+      ctx.fillStyle = withAlpha('#ffffff', 0.85 * t);
+      ctx.beginPath(); ctx.arc(mx, 0, size * 0.42, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+
+      // smoke wisp
+      ctx.fillStyle = withAlpha('#c9d3e8', 0.16 * t);
+      ctx.beginPath(); ctx.arc(mx + 7 + (1 - t) * 12, -3 - (1 - t) * 9, 4 + (1 - t) * 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();   // turret rotation
+    ctx.restore();   // tower translate
+
+    /* ---------- selection ring ---------- */
     if (selected) {
       ctx.save();
-      ctx.strokeStyle = withAlpha(this.def.color, 0.9);
+      ctx.translate(this.x, this.y);
+      const rot = this.spin * 0.35;
       ctx.fillStyle = withAlpha(this.def.color, 0.07);
-      ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.arc(0, 0, s.range, 0, Math.PI * 2); ctx.fill();
+
+      ctx.strokeStyle = withAlpha(this.def.color, 0.85);
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(this.x, this.y, s.range, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
+      ctx.setLineDash([9, 7]);
+      ctx.lineDashOffset = -this.spin * 26;
+      ctx.beginPath(); ctx.arc(0, 0, s.range, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // corner brackets at the edge of range
+      ctx.strokeStyle = withAlpha(this.def.color, 0.95);
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 4; i++) {
+        const a = rot + (i / 4) * Math.PI * 2;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(s.range - 9, -6); ctx.lineTo(s.range, 0); ctx.lineTo(s.range - 9, 6);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.restore();
     }
   }
@@ -327,12 +646,16 @@ class Projectile {
     this.slowDuration = stats.slowDuration || 0;
     this.antiAir = !!tower.def.antiAir;
     this.speed = tower.def.projectileSpeed;
-    this.radius = tower.type === 'cannon' ? 6 : tower.type === 'sniper' ? 3 : 4;
+    this.radius = tower.type === 'cannon' ? 6.5 : tower.type === 'sniper' ? 3 : 4;
     this.alive = true;
     this.trail = [];
+    this.spin = Math.random() * Math.PI * 2;
+    this.age = 0;
   }
 
   update(dt, game) {
+    this.age += dt;
+    this.spin += dt * 14;
     const t = this.target;
     // aim at the target if alive, else fly to its last known point
     const tx = t && t.alive ? t.x : this.lastX ?? this.x;
@@ -380,17 +703,70 @@ class Projectile {
   }
 
   draw(ctx) {
+    ctx.save();
+
+    // glowing tracer tail
     if (this.trail.length > 1) {
-      ctx.strokeStyle = withAlpha(this.color, 0.3);
-      ctx.lineWidth = this.radius * 0.9;
-      ctx.beginPath();
-      ctx.moveTo(this.trail[0].x, this.trail[0].y);
-      for (const p of this.trail) ctx.lineTo(p.x, p.y);
-      ctx.lineTo(this.x, this.y);
-      ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < this.trail.length; i++) {
+        const a = (i / this.trail.length) * 0.5;
+        ctx.strokeStyle = withAlpha(this.color, a);
+        ctx.lineWidth = this.radius * (0.4 + (i / this.trail.length) * 0.9);
+        ctx.beginPath();
+        ctx.moveTo(this.trail[i - 1].x, this.trail[i - 1].y);
+        ctx.lineTo(this.trail[i].x, this.trail[i].y);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.fillStyle = this.color;
-    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+
+    const ang = Math.atan2(this.y - (this.trail.at(-1)?.y ?? this.y),
+                           this.x - (this.trail.at(-1)?.x ?? this.x));
+    ctx.translate(this.x, this.y);
+
+    if (this.type === 'cannon') {
+      // spinning shell: brass body, dark driving band
+      ctx.rotate(ang);
+      ctx.fillStyle = '#d9b45c';
+      roundRect(ctx, -this.radius * 1.5, -this.radius * 0.72, this.radius * 3, this.radius * 1.44, 2);
+      ctx.fill();
+      ctx.fillStyle = '#8a6d2f';
+      roundRect(ctx, -this.radius * 0.2, -this.radius * 0.78, this.radius * 0.9, this.radius * 1.56, 1.5);
+      ctx.fill();
+      ctx.fillStyle = '#f2d68a';
+      ctx.beginPath(); ctx.arc(this.radius * 1.5, 0, this.radius * 0.62, 0, Math.PI * 2); ctx.fill();
+    } else if (this.type === 'frost') {
+      // tumouring ice shard
+      ctx.rotate(this.spin);
+      ctx.fillStyle = radialGlow(ctx, this.radius * 3.4, '#bff4ff', 0.85);
+      ctx.beginPath(); ctx.arc(0, 0, this.radius * 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#eafcff';
+      ctx.strokeStyle = '#6fd4ec'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -this.radius * 1.7); ctx.lineTo(this.radius * 0.8, 0);
+      ctx.lineTo(0, this.radius * 1.7); ctx.lineTo(-this.radius * 0.8, 0);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (this.type === 'sniper') {
+      // superheated dart with a hard core
+      ctx.rotate(ang);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = withAlpha(this.color, 0.5);
+      roundRect(ctx, -16, -1.8, 22, 3.6, 1.8); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#fffbe6';
+      roundRect(ctx, -5, -1.4, 10, 2.8, 1.4); ctx.fill();
+    } else {
+      // gunner slug with a hot tip
+      ctx.rotate(ang);
+      ctx.fillStyle = '#c9d3e8';
+      roundRect(ctx, -this.radius, -this.radius * 0.6, this.radius * 2, this.radius * 1.2, 1.5);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = withAlpha(this.color, 0.85);
+      ctx.beginPath(); ctx.arc(this.radius * 0.9, 0, this.radius * 0.85, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.restore();
   }
 }
 

@@ -17,6 +17,7 @@
         <div class="stat"><span>KILLS</span><b id="hud-kills">0</b></div>
       </div>
       <div class="controls">
+        <button id="btn-mute" title="Mute (M)">🔊</button>
         <button id="btn-pause" title="Pause / resume (Space)">⏸</button>
         <button id="btn-speed" title="Cycle speed">1×</button>
         <button id="btn-call" class="accent" title="Call next wave early for a bonus (Enter)">CALL WAVE</button>
@@ -63,6 +64,7 @@
           <li><kbd>T</kbd> targeting mode</li>
           <li><kbd>Enter</kbd> call wave early</li>
           <li><kbd>Space</kbd> pause · <kbd>+/-</kbd> speed</li>
+          <li><kbd>M</kbd> mute / unmute</li>
           <li class="note">Towers build on lit pads only.</li>
           <li class="note"><span class="tag aa">AIR</span> engages fliers ·
             <span class="tag ground">GND</span> ground only</li>
@@ -73,6 +75,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/entities.js"></script>
   <script src="js/waves.js"></script>
   <script src="js/game.js"></script>

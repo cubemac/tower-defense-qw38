@@ -24,7 +24,23 @@
     kills: $('hud-kills'), prep: $('hud-prep'), speed: $('hud-speed'),
     shop: $('shop'), inspector: $('inspector'), overlay: $('overlay'),
     ovTitle: $('ov-title'), ovBody: $('ov-body'), ovBtn: $('ov-btn'),
+    mute: $('btn-mute'),
   };
+
+  /* Audio needs a user gesture before the context will run. */
+  function unlockAudio() {
+    SFX.unlock();
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  }
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
+  function syncMute() {
+    el.mute.textContent = SFX.enabled ? '🔊' : '🔇';
+    el.mute.classList.toggle('off', !SFX.enabled);
+    el.mute.title = SFX.enabled ? 'Mute (M)' : 'Unmute (M)';
+  }
 
   /* ---------- shop ---------- */
   function buildShop() {
@@ -41,6 +57,7 @@
           <i class="tag ${t.antiAir ? 'aa' : 'ground'}">${t.antiAir ? 'AIR' : 'GND'}</i></span>
         <span class="si-cost">${t.cost}</span>`;
       b.addEventListener('click', () => {
+        SFX.click();
         game.selectBuildType(key);
         if (game.state === 'ready') game.beginRun();
         syncShop();
@@ -162,6 +179,7 @@
       return;
     }
     const hit = game.towers.find(t => t.col === c.col && t.row === c.row);
+    if (hit || game.selected) SFX.click();
     game.selected = hit || null;
   });
 
@@ -181,6 +199,7 @@
     if (k === 'x') game.sellSelected();
     if (k === 't') game.cycleTargetMode();
     if (k === 'enter') game.callWaveEarly();
+    if (k === 'm') syncMute();
 
     if (k >= '1' && k <= '5') {
       const keys = Object.keys(TOWERS);
@@ -195,11 +214,13 @@
     if (ev.key === 'Shift') game.shiftHeld = false;
   });
 
-  $('btn-pause').addEventListener('click', () => { game.paused = !game.paused; });
+  $('btn-pause').addEventListener('click', () => { game.paused = !game.paused; SFX.click(); });
   $('btn-speed').addEventListener('click', () => {
     const steps = [1, 2, 3, 4, 0.5];
     game.speed = steps[(steps.indexOf(game.speed) + 1) % steps.length] || 1;
+    SFX.click();
   });
+  el.mute.addEventListener('click', () => { SFX.toggle(); syncMute(); });
   $('btn-call').addEventListener('click', () => {
     if (game.state === 'ready') game.beginRun();
     else game.callWaveEarly();
@@ -209,6 +230,8 @@
   $('btn-mode').addEventListener('click', () => game.cycleTargetMode());
 
   el.ovBtn.addEventListener('click', () => {
+    SFX.unlock();
+    SFX.click();
     if (game.state === 'over' || game.state === 'won') {
       game.reset();
       game.toPrep();
@@ -239,6 +262,7 @@
 
   /* ---------- boot ---------- */
   buildShop();
+  syncMute();
   showOverlay(
     'TOWER DEFENSE',
     `Hold the line for <b>${WIN_WAVE}</b> waves.<br>
