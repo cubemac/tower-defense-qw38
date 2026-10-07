@@ -27,6 +27,7 @@ open index.html        # works straight off the filesystem, no server needed
 - [Testing & tooling](#testing--tooling)
 - [Browser support](#browser-support)
 - [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 Deeper docs: **[ARCHITECTURE](docs/ARCHITECTURE.md)** ·
 **[TUNING](docs/TUNING.md)** · **[TESTING](docs/TESTING.md)**
@@ -307,6 +308,9 @@ are classic `<script>` tags, not ES modules (modules are blocked by CORS on
 
 ## License
 
-No license file has been declared yet — which means **all rights reserved by
-default**. Pick one before sharing widely (MIT is the usual default for a toy like
-this); see [TUNING](docs/TUNING.md#adding-a-license).
+Released under the **MIT License** — see [LICENSE](LICENSE).
+
+You may use, copy, modify, merge, publish, distribute, sublicense and sell copies of
+this software, in source or binary form, with attribution kept intact. No warranty is
+provided. To pick a different license, see
+[TUNING → Changing the license](docs/TUNING.md#changing-the-license).

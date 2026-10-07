@@ -17,7 +17,7 @@ Everything you can change, and how to prove it didn't break the game.
 - [Recipe: add a sound](#recipe-add-a-sound)
 - [Recipe: change how a tower looks](#recipe-change-how-a-tower-looks)
 - [Performance](#performance)
-- [Adding a license](#adding-a-license)
+- [Changing the license](#changing-the-license)
 
 ---
 
@@ -348,17 +348,29 @@ per level. If you add gradients, cache them the same way.
 
 ---
 
-## Adding a license
+## Changing the license
 
-The repo currently has **no license file**, so all rights are reserved by default.
-To open it up:
+This project is released under the **MIT License** (`LICENSE`, © 2026 Robin Weiss).
+MIT is deliberately permissive: anyone may use, copy, modify, merge, publish,
+distribute, sublicense and sell it, provided the copyright and permission notice stay
+intact. There is no warranty, and you cannot hold the author liable.
+
+If MIT isn't what you want, replace `LICENSE` and update the license section in both
+`README.md` and this file:
+
+| goal | license to use |
+|---|---|
+| maximum adoption, no obligations beyond attribution | **MIT** (current) |
+| permissive, but with an explicit **patent grant** | Apache-2.0 |
+| derivatives must stay open under the same terms | GPL-3.0 |
+| derivatives must stay open, network use counts as distribution | AGPL-3.0 |
+| no license at all — refuse everything by default | delete `LICENSE` and the README section |
+
+If you ever add third-party code or art, check its license first — GPL-licensed
+snippets would require the whole game to become GPL, which is why MIT-only
+dependencies are worth preferring here.
 
 ```sh
-printf 'MIT License\n\nCopyright (c) 2026 Robin Weiss\n' > LICENSE
+# swap to Apache-2.0, for example
+curl -o LICENSE https://www.apache.org/licenses/LICENSE-2.0.txt
 ```
-
-…then paste the standard MIT body, commit and push. MIT is the usual default for a
-small open project: anyone can use, copy and modify, as long as they keep the notice.
-
-Pick something else if you care about patent grants (Apache-2.0) or want derivative
-games to stay open too (GPL-3.0).
