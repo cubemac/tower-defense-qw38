@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower Defense</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">TOWER<span>DEFENSE</span></div>
+      <div class="hud">
+        <div class="stat"><span>CREDITS</span><b id="hud-money">0</b></div>
+        <div class="stat lives"><span>LIVES</span><b id="hud-lives">0</b></div>
+        <div class="stat"><span>WAVE</span><b id="hud-wave">0</b></div>
+        <div class="stat"><span>KILLS</span><b id="hud-kills">0</b></div>
+      </div>
+      <div class="controls">
+        <button id="btn-pause" title="Pause / resume (Space)">⏸</button>
+        <button id="btn-speed" title="Cycle speed">1×</button>
+        <button id="btn-call" class="accent" title="Call next wave early for a bonus (Enter)">CALL WAVE</button>
+      </div>
+    </header>
+
+    <main class="stage-wrap">
+      <canvas id="stage" width="960" height="576"></canvas>
+      <div class="speed-badge" id="hud-speed">1×</div>
+      <div class="hud-prep" id="hud-prep">press start</div>
+
+      <div class="overlay hidden" id="overlay">
+        <div class="ov-card">
+          <h1 id="ov-title">TOWER DEFENSE</h1>
+          <div id="ov-body"></div>
+          <button id="ov-btn" class="accent big">Start</button>
+        </div>
+      </div>
+    </main>
+
+    <footer class="dock">
+      <section class="shop-panel">
+        <h2>Build</h2>
+        <div id="shop" class="shop"></div>
+      </section>
+
+      <section class="inspector hidden" id="inspector">
+        <h2 id="ins-name">—</h2>
+        <div id="ins-stats" class="stats"></div>
+        <div class="ins-btns">
+          <button id="btn-upgrade" class="accent">Upgrade</button>
+          <button id="btn-mode">Target: first</button>
+          <button id="btn-sell" class="danger">Sell</button>
+        </div>
+      </section>
+
+      <section class="legend">
+        <h2>Keys</h2>
+        <ul>
+          <li><kbd>1</kbd>–<kbd>5</kbd> select tower</li>
+          <li><kbd>click</kbd> place / inspect</li>
+          <li><kbd>right-click</kbd> cancel</li>
+          <li><kbd>U</kbd> upgrade · <kbd>X</kbd> sell</li>
+          <li><kbd>T</kbd> targeting mode</li>
+          <li><kbd>Enter</kbd> call wave early</li>
+          <li><kbd>Space</kbd> pause · <kbd>+/-</kbd> speed</li>
+          <li class="note">Towers build on lit pads only.</li>
+          <li class="note"><span class="tag aa">AIR</span> engages fliers ·
+            <span class="tag ground">GND</span> ground only</li>
+        </ul>
+      </section>
+    </footer>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/waves.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
