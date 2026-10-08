@@ -222,7 +222,7 @@ js/entities.js        Enemy, Tower, Projectile, particles, chain lightning
 js/waves.js           wave composition + spawn scheduler
 js/game.js            state machine, simulation step, map rendering
 js/main.js            DOM wiring, input, HUD, requestAnimationFrame loop
-tools/sim-check.js    60 headless assertions (stubbed canvas, no Web Audio)
+tools/sim-check.js    63 headless assertions (stubbed canvas, no Web Audio)
 tools/balance.js      auto-player difficulty probe
 ```
 
@@ -262,7 +262,7 @@ Full recipes — new tower, new enemy, new map path, new sound — are in
 ## Testing & tooling
 
 ```sh
-node tools/sim-check.js     # 60 assertions, exits non-zero on failure
+node tools/sim-check.js     # 63 assertions, exits non-zero on failure
 node tools/balance.js 27    # auto-plays N waves, prints the difficulty curve
 ```
 
@@ -270,7 +270,7 @@ Both load the **real** game sources into a VM sandbox with a stubbed 2D context,
 they exercise the same code the browser runs. No test framework, no install step.
 
 ```
-✅ ALL CHECKS PASSED          ← 60 assertions
+✅ ALL CHECKS PASSED          ← 63 assertions
 median wave reached : 27 / 27 · lives 17, 17, 17 · leaks 3
 ```
 

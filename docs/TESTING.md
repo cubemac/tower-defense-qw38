@@ -4,7 +4,7 @@ Two scripts, zero dependencies, no test framework. Both load the **real** game
 sources and run them headlessly.
 
 ```sh
-node tools/sim-check.js     # 60 assertions — exits non-zero on failure
+node tools/sim-check.js     # 63 assertions — exits non-zero on failure
 node tools/balance.js 27    # auto-player difficulty probe
 ```
 
@@ -56,6 +56,8 @@ Run it and you get grouped, self-documenting output with real numbers:
 | **audio engine** | 2 | full method surface present; every call is a safe no-op with no `AudioContext` |
 | **damage maths** | 3 | armour subtracts flat; slow applies multiplicatively; lethal damage zeroes HP and flags dead |
 | **leak / game over** | 2 | a leaked unit costs exactly one life; lives bottom out into `state: 'over'` at 0, never negative |
+| **same-frame kill / leak** | 2 | an enemy killed earlier in the frame cannot leak a life at the goal line; live enemies still leak normally |
+| **input bindings** | 1 | source-level check that the `M` key calls `SFX.toggle()`, not just the icon repaint |
 | **win condition** | 3 | clearing `WIN_WAVE` sets `'won'`; one wave short does **not** win early; win wave is in a sane range |
 | **endless scaling** | 2 | HP and unit count both increase past the table |
 
@@ -205,3 +207,11 @@ Not hypothetical — these were real, shipped-in-progress defects:
    console.log(missing.length?"MISSING: "+missing.join(", "):"DOM wiring OK ✓");
    '
    ```
+4. **`M` key never muted.** The keydown handler called `syncMute()` — which only
+   repaints the 🔊/🔇 icon from `SFX.enabled` — but never `SFX.toggle()`, so the
+   keyboard mute was inert while the button worked. Caught in code review; now pinned
+   by the source-level `input bindings` assertion.
+5. **Dead enemies could steal a life.** The enemy update loop ran `update()` on units
+   already killed by a projectile earlier in the same frame; if the corpse crossed the
+   goal line in that step it set `leaked = true` and fired `onLeak()`. One-frame race,
+   invisible to every earlier assertion. Now pinned by `same-frame kill / leak`.

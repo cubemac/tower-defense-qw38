@@ -389,6 +389,45 @@ for (let i = 0; i < 40 && g2.state !== 'over'; i++) {
 }
 check('lives bottom out into game over', g2.state === 'over' && g2.lives === 0);
 
+console.log('\nsame-frame kill / leak regression');
+{
+  /* A projectile kill earlier in the frame must not leak a life when the
+   * corpse crosses the goal line in the same update step. The enemy loop
+   * once ran update() on dead units, so they still flagged leaked=true. */
+  const g = new G.Game(canvas);
+  g.shiftHeld = false; g.toPrep();
+  const e = g.spawnEnemy('grunt', 1);
+  e.d = G.PATH.length - 0.5;
+  e.hp = 1;
+  g.damageEnemy(e, 999, 'gunner', null);   // dead before the enemy loop runs
+  const lives = g.lives;
+  g.update(dt);
+  check('enemy killed in the same frame does not leak',
+    g.lives === lives && !e.leaked,
+    `lives ${lives} -> ${g.lives}, leaked=${e.leaked}`);
+
+  // the guard must not swallow real breaches either
+  const g3 = new G.Game(canvas);
+  g3.toPrep();
+  const live = g3.spawnEnemy('grunt', 1);
+  live.d = G.PATH.length - 0.5;
+  g3.update(dt);
+  check('live enemy still leaks normally',
+    g3.lives === G.START_LIVES - 1 && live.leaked,
+    `lives ${g3.lives}, leaked=${live.leaked}`);
+}
+
+console.log('\ninput bindings (source-level)');
+{
+  /* main.js touches the DOM and cannot load headless — assert on its source.
+   * The M key once called syncMute() only, which repaints the icon but
+   * never toggles audio. */
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+  check('M key toggles audio, not just the icon',
+    /k === 'm'\)\s*\{\s*SFX\.toggle\(\);/.test(src),
+    'keydown m -> SFX.toggle() + syncMute()');
+}
+
 console.log('\nwin condition');
 {
   const g = new G.Game(canvas);

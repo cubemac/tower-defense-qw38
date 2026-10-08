@@ -211,8 +211,9 @@ class Game {
     this.projectiles = this.projectiles.filter(p => p.alive);
 
     for (const e of this.enemies) {
+      if (!e.alive) continue;   // killed earlier this frame — must not leak
       e.update(step);
-      if (!e.alive && e.leaked) this.onLeak(e);
+      if (e.leaked) this.onLeak(e);
     }
     this.enemies = this.enemies.filter(e => e.alive);
 

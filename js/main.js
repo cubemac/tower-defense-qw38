@@ -199,7 +199,7 @@
     if (k === 'x') game.sellSelected();
     if (k === 't') game.cycleTargetMode();
     if (k === 'enter') game.callWaveEarly();
-    if (k === 'm') syncMute();
+    if (k === 'm') { SFX.toggle(); syncMute(); }
 
     if (k >= '1' && k <= '5') {
       const keys = Object.keys(TOWERS);
