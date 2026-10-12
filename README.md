@@ -262,7 +262,7 @@ Full recipes — new tower, new enemy, new map path, new sound — are in
 ## Testing & tooling
 
 ```sh
-node tools/sim-check.js     # 63 assertions, exits non-zero on failure
+node tools/sim-check.js     # 71 assertions, exits non-zero on failure
 node tools/balance.js 27    # auto-plays N waves, prints the difficulty curve
 ```
 
@@ -270,7 +270,7 @@ Both load the **real** game sources into a VM sandbox with a stubbed 2D context,
 they exercise the same code the browser runs. No test framework, no install step.
 
 ```
-✅ ALL CHECKS PASSED          ← 63 assertions
+✅ ALL CHECKS PASSED          ← 71 assertions
 median wave reached : 27 / 27 · lives 17, 17, 17 · leaks 3
 ```
 

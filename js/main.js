@@ -14,8 +14,7 @@
   canvas.style.height = GRID.height + 'px';
   ctx.scale(dpr, dpr);
 
-  const game = new Game(canvas);
-  game.shiftHeld = false;
+  const game = new Game(canvas);   // shiftHeld is initialised by the constructor
 
   /* ---------- DOM refs ---------- */
   const $ = (id) => document.getElementById(id);
@@ -192,13 +191,18 @@
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Shift') game.shiftHeld = true;
 
+    // never hijack browser chords: ⌘1–5 switches tabs, Ctrl+R reloads, …
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+
     const k = ev.key.toLowerCase();
     if (k === 'escape') { game.buildType = null; game.selected = null; }
     if (k === ' ') { ev.preventDefault(); game.paused = !game.paused; }
     if (k === 'u') game.upgradeSelected();
     if (k === 'x') game.sellSelected();
     if (k === 't') game.cycleTargetMode();
-    if (k === 'enter') game.callWaveEarly();
+    // Enter is reserved for calling the wave — suppress the default so a
+    // still-focused shop/inspector button cannot fire a second action
+    if (k === 'enter') { ev.preventDefault(); game.callWaveEarly(); }
     if (k === 'm') { SFX.toggle(); syncMute(); }
 
     if (k >= '1' && k <= '5') {
@@ -248,7 +252,7 @@
     last = now;
 
     game.update(dt);
-    game.draw(ctx);
+    game.draw(ctx, dt);   // real frame dt — toasts must not race on 120Hz
     syncHud();
 
     if ((game.state === 'over' || game.state === 'won') && !ended) {

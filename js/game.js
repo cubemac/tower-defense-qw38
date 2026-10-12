@@ -16,6 +16,7 @@ class Game {
     this.paused = false;
     this.time = 0;
     this.floats = [];
+    this.shiftHeld = false;   // input state; main.js keeps it current
   }
 
   reset() {
@@ -39,13 +40,7 @@ class Game {
     this.occupied = new Set();
   }
 
-  /* ---------- derived ---------- */
-  get towerMap() {
-    const m = {};
-    for (const t of this.towers) m[`${t.col},${t.row}`] = t;
-    return m;
-  }
-
+  /* ---------- placement ---------- */
   canBuild(col, row) {
     if (!inBounds(col, row)) return false;
     if (!BUILD_PADS.has(`${col},${row}`)) return false;   // curated pads only
@@ -170,6 +165,7 @@ class Game {
   }
 
   fireChain(tower, first, stats) {
+    // chains intentionally cross air/ground — tesla engages both media anyway
     const hit = new Set([first]);
     const pts = [{ x: tower.x, y: tower.y }, { x: first.x, y: first.y }];
     let cur = first;
@@ -240,6 +236,9 @@ class Game {
   }
 
   completeWave() {
+    // a lethal leak earlier in this same frame already ended the run;
+    // completing the final wave must not overwrite 'over' with 'won'
+    if (this.state === 'over') return;
     this.inWave = false;
     const bonus = WAVE_BOUNTY_BASE + this.wave * 2;
     this.money += bonus;
@@ -353,7 +352,7 @@ class Game {
     ctx.restore();
   }
 
-  draw(ctx) {
+  draw(ctx, dt = 1 / 60) {
     this.drawMap(ctx);
     this.drawBuildOverlay(ctx);
 
@@ -385,8 +384,9 @@ class Game {
     }
     ctx.restore();
 
-    // decay toasts on real time, not sim speed
-    for (const t of this.floats) t.life -= 1 / 60;
+    // decay toasts on real time (caller passes the un-scaled frame dt),
+    // not sim speed — and not on a hardcoded 60Hz assumption either
+    for (const t of this.floats) t.life -= dt;
     this.floats = this.floats.filter(t => t.life > 0);
   }
 }

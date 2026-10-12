@@ -175,9 +175,10 @@ function octagonPath(ctx, r) {
   ctx.closePath();
 }
 
-/* Hot-barrel tint: cold steel -> amber -> white hot. */
-function heatTint(ctx, baseGrad, heat) {
-  if (heat <= 0.02) return baseGrad;
+/* Hot-barrel tint: cold steel -> amber -> white hot. Builds its own
+ * gradient; callers only pass the 0..1 heat value. */
+function heatTint(ctx, heat) {
+  if (heat <= 0.02) return null;
   const h = clamp(heat, 0, 1);
   const g = ctx.createLinearGradient(0, -6, 0, 6);
   g.addColorStop(0, `rgb(${255},${Math.round(210 - h * 60)},${Math.round(190 - h * 150)})`);
@@ -413,7 +414,7 @@ class Tower {
     ctx.translate(kick, 0);
 
     const flash = this.muzzle > 0;
-    const barrelGrad = heatTint(ctx, g.barrel, this.heat);
+    const barrelGrad = heatTint(ctx, this.heat) || g.barrel;
 
     if (this.type === 'gunner') {
       // chassis + twin/triple barrels with muzzle brakes

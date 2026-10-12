@@ -4,7 +4,7 @@ Two scripts, zero dependencies, no test framework. Both load the **real** game
 sources and run them headlessly.
 
 ```sh
-node tools/sim-check.js     # 63 assertions — exits non-zero on failure
+node tools/sim-check.js     # 71 assertions — exits non-zero on failure
 node tools/balance.js 27    # auto-player difficulty probe
 ```
 
@@ -57,7 +57,10 @@ Run it and you get grouped, self-documenting output with real numbers:
 | **damage maths** | 3 | armour subtracts flat; slow applies multiplicatively; lethal damage zeroes HP and flags dead |
 | **leak / game over** | 2 | a leaked unit costs exactly one life; lives bottom out into `state: 'over'` at 0, never negative |
 | **same-frame kill / leak** | 2 | an enemy killed earlier in the frame cannot leak a life at the goal line; live enemies still leak normally |
-| **input bindings** | 1 | source-level check that the `M` key calls `SFX.toggle()`, not just the icon repaint |
+| **final-wave leak precedence** | 2 | a lethal leak on `WIN_WAVE` stays `'over'` — completing the wave must never overwrite it with `'won'`; a clean clear still wins |
+| **constructor state + toast decay** | 3 | `shiftHeld` is initialised by the constructor, not by callers; toasts decay on the real frame `dt` passed to `draw()`, so 120Hz displays don't halve their lifetime |
+| **tesla chain media crossing** | 1 | chains hop between air and ground on purpose (tesla targets both) — pinned as designed behaviour, not an accident |
+| **input bindings** | 3 | source-level checks: `M` calls `SFX.toggle()`; ⌘/Ctrl/Alt chords never reach the game hotkeys; `Enter` is `preventDefault()`-ed so a still-focused button can't double-fire |
 | **win condition** | 3 | clearing `WIN_WAVE` sets `'won'`; one wave short does **not** win early; win wave is in a sane range |
 | **endless scaling** | 2 | HP and unit count both increase past the table |
 
@@ -215,3 +218,8 @@ Not hypothetical — these were real, shipped-in-progress defects:
    already killed by a projectile earlier in the same frame; if the corpse crossed the
    goal line in that step it set `leaked = true` and fired `onLeak()`. One-frame race,
    invisible to every earlier assertion. Now pinned by `same-frame kill / leak`.
+6. **Dying on the final wave showed VICTORY.** If the last enemy of `WIN_WAVE` leaked
+   and dropped lives to 0, `onLeak()` set `state = 'over'` — and then `completeWave()`,
+   still running in the same frame, overwrote it with `'won'`. Reproduced headlessly
+   (`lives: 0 | state: won`), fixed with an `'over'` guard at the top of
+   `completeWave()`. Now pinned by `final-wave leak precedence`.

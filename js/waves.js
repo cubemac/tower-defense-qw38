@@ -52,7 +52,7 @@ class Spawner {
     this.active = true;
   }
 
-  /** Returns enemy keys to spawn this step. */
+  /** Advances the timer and spawns due enemies via game.spawnEnemy(). */
   update(dt, game) {
     if (!this.active) return;
     this.timer += dt;

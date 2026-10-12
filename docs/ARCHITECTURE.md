@@ -88,7 +88,7 @@ function frame(now) {
   last = now;
 
   game.update(dt);     // advance simulation
-  game.draw(ctx);      // render current state
+  game.draw(ctx, dt);  // render current state (dt = real frame time, drives toast decay)
   syncHud();           // push numbers into the DOM
 
   requestAnimationFrame(frame);

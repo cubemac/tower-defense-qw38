@@ -325,8 +325,9 @@ Layer 2–3 short sounds rather than one long one — a `noise` burst for the bo
 - **Metal look:** reuse the cached `g.plate` / `g.body` / `g.barrel` gradients.
   If you create your own, add it to the `grads()` cache object and bump
   `_gradLevel` in `upgrade()`, or you'll leak gradients every frame.
-- **Barrel heat:** `heatTint(ctx, g.barrel, this.heat)` — pass any gradient plus the
-  tower's `heat` (0–1) for cold→amber→white-hot.
+- **Barrel heat:** `heatTint(ctx, this.heat) || g.barrel` — pass the tower's
+  `heat` (0–1) for cold→amber→white-hot; it returns `null` when cold so the
+  caller falls back to the cached metal gradient.
 
 ---
 

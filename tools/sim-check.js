@@ -417,6 +417,66 @@ console.log('\nsame-frame kill / leak regression');
     `lives ${g3.lives}, leaked=${live.leaked}`);
 }
 
+console.log('\nfinal-wave leak precedence (regression)');
+{
+  /* A lethal leak on the win wave once showed VICTORY: onLeak() set
+   * state='over', then completeWave() overwrote it with 'won' in the
+   * same frame. 'over' must win the frame, always. */
+  const g = new G.Game(canvas);
+  g.toPrep();
+  g.state = 'wave'; g.inWave = true; g.wave = G.WIN_WAVE; g.lives = 1;
+  g.spawner.active = false; g.spawner.spawned = 10; g.spawner.total = 10;
+  const e = g.spawnEnemy('grunt', 1);
+  e.d = G.PATH.length - 0.1;
+  g.update(dt);
+  check('lethal leak on the win wave stays over',
+    g.lives === 0 && g.state === 'over',
+    `lives ${g.lives} -> ${g.state}`);
+
+  // the guard must not swallow legitimate victories either
+  const g2 = new G.Game(canvas);
+  g2.toPrep();
+  g2.state = 'wave'; g2.inWave = true; g2.wave = G.WIN_WAVE;
+  g2.spawner.active = false; g2.spawner.spawned = 10; g2.spawner.total = 10;
+  g2.update(dt);
+  check('clean clear of the win wave still wins', g2.state === 'won',
+    `lives ${g2.lives} -> ${g2.state}`);
+}
+
+console.log('\nconstructor state + toast decay');
+{
+  const g = new G.Game(canvas);
+  check('shiftHeld initialised by the constructor', g.shiftHeld === false,
+    `shiftHeld = ${g.shiftHeld}`);
+  g.toPrep();
+  g.toast('decay me', '#fff');
+  g.draw(makeCtx(), 3);     // one 3s real frame flushes a 2.6s toast
+  check('toasts decay on the passed real dt', g.floats.length === 0,
+    `${g.floats.length} toasts left after dt=3`);
+  g.toast('stay', '#fff');
+  g.draw(makeCtx());        // default frame keeps it alive
+  check('toasts survive a normal frame', g.floats.length === 1,
+    `${g.floats.length} toast left after default dt`);
+}
+
+console.log('\ntesla chain media crossing (documented behaviour)');
+{
+  /* Chains intentionally hop between air and ground — tesla targets both
+   * media, so the chain does not filter by flying. Pinned as designed. */
+  const g = new G.Game(canvas);
+  g.toPrep();
+  const tw = new G.Tower('tesla', 0, 0);
+  const flier = g.spawnEnemy('wraith', 1);
+  const ground = g.spawnEnemy('grunt', 1);
+  flier.x = tw.x + 30; flier.y = tw.y;      // first target: air
+  ground.x = tw.x + 60; ground.y = tw.y;     // chain hop: ground, in range
+  const hpF = flier.hp, hpG = ground.hp;
+  g.fireChain(tw, flier, tw.stats());
+  check('chain intentionally crosses air and ground',
+    flier.hp < hpF && ground.hp < hpG,
+    `wraith ${hpF}→${Math.round(flier.hp)}, grunt ${hpG}→${Math.round(ground.hp)}`);
+}
+
 console.log('\ninput bindings (source-level)');
 {
   /* main.js touches the DOM and cannot load headless — assert on its source.
@@ -426,6 +486,12 @@ console.log('\ninput bindings (source-level)');
   check('M key toggles audio, not just the icon',
     /k === 'm'\)\s*\{\s*SFX\.toggle\(\);/.test(src),
     'keydown m -> SFX.toggle() + syncMute()');
+  check('modifier chords never reach game hotkeys',
+    /if \(ev\.metaKey \|\| ev\.ctrlKey \|\| ev\.altKey\) return;/.test(src),
+    '⌘/Ctrl/Alt + 1–5 no longer selects towers');
+  check('Enter cannot double-fire a still-focused button',
+    /k === 'enter'\)\s*\{\s*ev\.preventDefault\(\)/.test(src),
+    'keydown enter -> preventDefault() + callWaveEarly()');
 }
 
 console.log('\nwin condition');
